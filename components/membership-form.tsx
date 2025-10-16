@@ -99,15 +99,75 @@ export default function MembershipForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState('')
   const [formKey, setFormKey] = useState(0)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
+
+  const validateForm = (formData: FormData) => {
+    const errors: string[] = []
+    
+    // Required fields for primary member
+    const primaryFields = [
+      'firstName', 'lastName', 'phone', 'email', 'dob', 'workStatus', 
+      'address', 'companyName', 'primaryIndustry', 'getPlatform', 'helpCommunity'
+    ]
+    
+    // Required fields for spouse
+    const spouseFields = [
+      'spouseFirstName', 'spouseLastName', 'spousePhone', 'spouseEmail', 
+      'spouseDob', 'spouseWorkStatus', 'spouseAddress', 'spouseCompanyName', 
+      'spousePrimaryIndustry', 'spouseGetPlatform', 'spouseHelpCommunity'
+    ]
+    
+    // Check primary member fields
+    primaryFields.forEach(field => {
+      const value = formData.get(field) as string
+      if (!value || value.trim() === '') {
+        const fieldName = field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')
+        errors.push(`Primary member ${fieldName} is required`)
+      }
+    })
+    
+    // Check spouse fields
+    spouseFields.forEach(field => {
+      const value = formData.get(field) as string
+      if (!value || value.trim() === '') {
+        const fieldName = field.replace('spouse', '').charAt(0).toLowerCase() + field.replace('spouse', '').slice(1)
+        const displayName = fieldName.charAt(0).toUpperCase() + fieldName.slice(1).replace(/([A-Z])/g, ' $1')
+        errors.push(`Spouse ${displayName} is required`)
+      }
+    })
+    
+    // Check file uploads
+    const primaryPhoto = formData.get('passportUpload') as File
+    const spousePhoto = formData.get('spousePassportUpload') as File
+    
+    if (!primaryPhoto || primaryPhoto.size === 0) {
+      errors.push('Primary member passport photo is required')
+    }
+    
+    if (!spousePhoto || spousePhoto.size === 0) {
+      errors.push('Spouse passport photo is required')
+    }
+    
+    return errors
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const form = e.currentTarget
     setIsSubmitting(true)
     setSubmitMessage('')
+    setValidationErrors([])
 
     try {
       const formData = new FormData(form)
+      
+      // Validate form before submission
+      const errors = validateForm(formData)
+      if (errors.length > 0) {
+        setValidationErrors(errors)
+        setIsSubmitting(false)
+        return
+      }
       
       const response = await fetch('/api/submit-membership', {
         method: 'POST',
@@ -122,6 +182,7 @@ export default function MembershipForm() {
         form.reset()
         // Remount the form to clear internal component state
         setFormKey((k) => k + 1)
+        setValidationErrors([])
       } else {
         setSubmitMessage(result.message || 'Failed to submit application. Please try again.')
       }
@@ -135,6 +196,17 @@ export default function MembershipForm() {
 
   return (
     <div className="w-full max-w-6xl mx-auto">
+      {validationErrors.length > 0 && (
+        <div className="mb-4 p-4 bg-red-100 border border-red-200 rounded-md">
+          <h3 className="text-red-800 font-semibold mb-2">Please fill in all required fields:</h3>
+          <ul className="text-red-700 text-sm space-y-1">
+            {validationErrors.map((error, index) => (
+              <li key={index}>• {error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      
       {submitMessage && (
         <div className={`mb-4 text-center ${
           submitMessage.includes('successfully') 
@@ -145,7 +217,13 @@ export default function MembershipForm() {
         </div>
       )}
       
-      <CoupleMembershipForm key={formKey} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+      <CoupleMembershipForm 
+        key={formKey} 
+        onSubmit={handleSubmit} 
+        isSubmitting={isSubmitting}
+        validationErrors={validationErrors}
+        setValidationErrors={setValidationErrors}
+      />
     </div>
   )
 }
@@ -153,9 +231,13 @@ export default function MembershipForm() {
 function CoupleMembershipForm({
   onSubmit,
   isSubmitting,
+  validationErrors,
+  setValidationErrors,
 }: {
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
   isSubmitting: boolean
+  validationErrors: string[]
+  setValidationErrors: (errors: string[]) => void
 }) {
   const [formData, setFormData] = useState({
     // Primary member
@@ -188,6 +270,10 @@ function CoupleMembershipForm({
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+    // Clear validation errors when user starts typing
+    if (validationErrors.length > 0) {
+      setValidationErrors([])
+    }
   }
   const [primaryPhotoName, setPrimaryPhotoName] = useState('')
   const [spousePhotoName, setSpousePhotoName] = useState('')
@@ -378,7 +464,12 @@ function CoupleMembershipForm({
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => setPrimaryPhotoName(e.target.files?.[0]?.name || '')}
+                onChange={(e) => {
+                  setPrimaryPhotoName(e.target.files?.[0]?.name || '')
+                  if (validationErrors.length > 0) {
+                    setValidationErrors([])
+                  }
+                }}
               />
               <label
                 htmlFor="passportUpload"
@@ -583,7 +674,12 @@ function CoupleMembershipForm({
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => setSpousePhotoName(e.target.files?.[0]?.name || '')}
+                onChange={(e) => {
+                  setSpousePhotoName(e.target.files?.[0]?.name || '')
+                  if (validationErrors.length > 0) {
+                    setValidationErrors([])
+                  }
+                }}
               />
               <label
                 htmlFor="spousePassportUpload"

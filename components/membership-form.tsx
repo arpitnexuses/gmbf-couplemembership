@@ -78,10 +78,10 @@ const industries = [
   "Other",
 ]
 
-function IndustrySelect({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
+function IndustrySelect({ id, value, onChange, className }: { id: string; value: string; onChange: (value: string) => void; className?: string }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0">
+      <SelectTrigger className={className || "bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0"}>
         <SelectValue placeholder="Select Industry" />
       </SelectTrigger>
       <SelectContent>
@@ -99,10 +99,10 @@ export default function MembershipForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState('')
   const [formKey, setFormKey] = useState(0)
-  const [validationErrors, setValidationErrors] = useState<string[]>([])
+  const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({})
 
   const validateForm = (formData: FormData) => {
-    const errors: string[] = []
+    const fieldErrors: Record<string, boolean> = {}
     
     // Required fields for primary member
     const primaryFields = [
@@ -121,8 +121,7 @@ export default function MembershipForm() {
     primaryFields.forEach(field => {
       const value = formData.get(field) as string
       if (!value || value.trim() === '') {
-        const fieldName = field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')
-        errors.push(`Primary member ${fieldName} is required`)
+        fieldErrors[field] = true
       }
     })
     
@@ -130,9 +129,7 @@ export default function MembershipForm() {
     spouseFields.forEach(field => {
       const value = formData.get(field) as string
       if (!value || value.trim() === '') {
-        const fieldName = field.replace('spouse', '').charAt(0).toLowerCase() + field.replace('spouse', '').slice(1)
-        const displayName = fieldName.charAt(0).toUpperCase() + fieldName.slice(1).replace(/([A-Z])/g, ' $1')
-        errors.push(`Spouse ${displayName} is required`)
+        fieldErrors[field] = true
       }
     })
     
@@ -141,14 +138,14 @@ export default function MembershipForm() {
     const spousePhoto = formData.get('spousePassportUpload') as File
     
     if (!primaryPhoto || primaryPhoto.size === 0) {
-      errors.push('Primary member passport photo is required')
+      fieldErrors['passportUpload'] = true
     }
     
     if (!spousePhoto || spousePhoto.size === 0) {
-      errors.push('Spouse passport photo is required')
+      fieldErrors['spousePassportUpload'] = true
     }
     
-    return errors
+    return fieldErrors
   }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -156,15 +153,16 @@ export default function MembershipForm() {
     const form = e.currentTarget
     setIsSubmitting(true)
     setSubmitMessage('')
-    setValidationErrors([])
+    setValidationErrors({})
 
     try {
       const formData = new FormData(form)
       
       // Validate form before submission
-      const errors = validateForm(formData)
-      if (errors.length > 0) {
-        setValidationErrors(errors)
+      const fieldErrors = validateForm(formData)
+      const hasErrors = Object.values(fieldErrors).some(error => error)
+      if (hasErrors) {
+        setValidationErrors(fieldErrors)
         setIsSubmitting(false)
         return
       }
@@ -182,7 +180,7 @@ export default function MembershipForm() {
         form.reset()
         // Remount the form to clear internal component state
         setFormKey((k) => k + 1)
-        setValidationErrors([])
+        setValidationErrors({})
       } else {
         setSubmitMessage(result.message || 'Failed to submit application. Please try again.')
       }
@@ -196,17 +194,6 @@ export default function MembershipForm() {
 
   return (
     <div className="w-full max-w-6xl mx-auto">
-      {validationErrors.length > 0 && (
-        <div className="mb-4 p-4 bg-red-100 border border-red-200 rounded-md">
-          <h3 className="text-red-800 font-semibold mb-2">Please fill in all required fields:</h3>
-          <ul className="text-red-700 text-sm space-y-1">
-            {validationErrors.map((error, index) => (
-              <li key={index}>• {error}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      
       {submitMessage && (
         <div className={`mb-4 text-center ${
           submitMessage.includes('successfully') 
@@ -236,8 +223,8 @@ function CoupleMembershipForm({
 }: {
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
   isSubmitting: boolean
-  validationErrors: string[]
-  setValidationErrors: (errors: string[]) => void
+  validationErrors: Record<string, boolean>
+  setValidationErrors: (errors: Record<string, boolean> | ((prev: Record<string, boolean>) => Record<string, boolean>)) => void
 }) {
   const [formData, setFormData] = useState({
     // Primary member
@@ -271,9 +258,25 @@ function CoupleMembershipForm({
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     // Clear validation errors when user starts typing
-    if (validationErrors.length > 0) {
-      setValidationErrors([])
+    if (validationErrors[field]) {
+      setValidationErrors((prev: Record<string, boolean>) => ({ ...prev, [field]: false }))
     }
+  }
+
+  const getInputClassName = (field: string) => {
+    return `bg-gray-100 focus:ring-0 ${
+      validationErrors[field] 
+        ? 'border-red-500 focus:border-red-500' 
+        : 'border-gray-300 focus:border-gray-400'
+    }`
+  }
+
+  const getSelectClassName = (field: string) => {
+    return `bg-gray-100 focus:ring-0 ${
+      validationErrors[field] 
+        ? 'border-red-500 focus:border-red-500' 
+        : 'border-gray-300 focus:border-gray-400'
+    }`
   }
   const [primaryPhotoName, setPrimaryPhotoName] = useState('')
   const [spousePhotoName, setSpousePhotoName] = useState('')
@@ -322,7 +325,7 @@ function CoupleMembershipForm({
               name="firstName"
               value={formData.firstName}
               onChange={(e) => handleInputChange('firstName', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0" 
+              className={getInputClassName('firstName')} 
             />
           </div>
           <div className="space-y-2">
@@ -334,7 +337,7 @@ function CoupleMembershipForm({
               name="lastName"
               value={formData.lastName}
               onChange={(e) => handleInputChange('lastName', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0" 
+              className={getInputClassName('lastName')} 
             />
           </div>
         </div>
@@ -350,7 +353,7 @@ function CoupleMembershipForm({
               type="tel" 
               value={formData.phone}
               onChange={(e) => handleInputChange('phone', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0" 
+              className={getInputClassName('phone')} 
             />
           </div>
           <div className="space-y-2">
@@ -363,7 +366,7 @@ function CoupleMembershipForm({
               type="email" 
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0" 
+              className={getInputClassName('email')} 
             />
           </div>
         </div>
@@ -380,7 +383,7 @@ function CoupleMembershipForm({
               value={formData.dob}
               onChange={(e) => handleInputChange('dob', e.target.value)}
               placeholder="dd / mm / yyyy"
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0"
+              className={getInputClassName('dob')}
             />
           </div>
           <div className="space-y-2">
@@ -388,7 +391,7 @@ function CoupleMembershipForm({
               Work Status
             </Label>
             <Select value={formData.workStatus} onValueChange={(value) => handleInputChange('workStatus', value)}>
-              <SelectTrigger className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0">
+              <SelectTrigger className={getSelectClassName('workStatus')}>
                 <SelectValue placeholder="Select Work Status" />
               </SelectTrigger>
               <SelectContent>
@@ -407,7 +410,7 @@ function CoupleMembershipForm({
               name="address"
               value={formData.address}
               onChange={(e) => handleInputChange('address', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0" 
+              className={getInputClassName('address')} 
             />
           </div>
         </div>
@@ -422,7 +425,7 @@ function CoupleMembershipForm({
               name="companyName"
               value={formData.companyName}
               onChange={(e) => handleInputChange('companyName', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0" 
+              className={getInputClassName('companyName')} 
             />
           </div>
           <div className="space-y-2">
@@ -433,6 +436,7 @@ function CoupleMembershipForm({
               id="primaryIndustry" 
               value={formData.primaryIndustry}
               onChange={(value) => handleInputChange('primaryIndustry', value)}
+              className={getSelectClassName('primaryIndustry')}
             />
             <input type="hidden" name="primaryIndustry" value={formData.primaryIndustry} />
           </div>
@@ -448,7 +452,7 @@ function CoupleMembershipForm({
             value={formData.primaryIndustryOther}
             onChange={(e) => handleInputChange('primaryIndustryOther', e.target.value)}
             placeholder="Type Industry Here"
-            className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0"
+            className={getInputClassName('primaryIndustryOther')}
           />
         </div>
 
@@ -457,7 +461,11 @@ function CoupleMembershipForm({
             <Label htmlFor="passportUpload" className="text-gray-600 text-sm">
               {"Upload – Passport Size Photos"}
             </Label>
-            <div className="flex items-center gap-2">
+            <div className={`flex items-center gap-2 p-2 rounded ${
+              validationErrors.passportUpload 
+                ? 'border-2 border-red-500 bg-red-50' 
+                : ''
+            }`}>
               <Input
                 id="passportUpload"
                 name="passportUpload"
@@ -466,8 +474,8 @@ function CoupleMembershipForm({
                 className="hidden"
                 onChange={(e) => {
                   setPrimaryPhotoName(e.target.files?.[0]?.name || '')
-                  if (validationErrors.length > 0) {
-                    setValidationErrors([])
+                  if (validationErrors.passportUpload) {
+                    setValidationErrors((prev: Record<string, boolean>) => ({ ...prev, passportUpload: false }))
                   }
                 }}
               />
@@ -499,7 +507,7 @@ function CoupleMembershipForm({
               value={formData.getPlatform}
               onChange={(e) => handleInputChange('getPlatform', e.target.value)}
               rows={4}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0 resize-none"
+              className={getInputClassName('getPlatform') + ' resize-none'}
             />
           </div>
           <div className="space-y-2">
@@ -512,7 +520,7 @@ function CoupleMembershipForm({
               value={formData.helpCommunity}
               onChange={(e) => handleInputChange('helpCommunity', e.target.value)}
               rows={4}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0 resize-none"
+              className={getInputClassName('helpCommunity') + ' resize-none'}
             />
           </div>
         </div>
@@ -532,7 +540,7 @@ function CoupleMembershipForm({
               name="spouseFirstName"
               value={formData.spouseFirstName}
               onChange={(e) => handleInputChange('spouseFirstName', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0" 
+              className={getInputClassName('spouseFirstName')} 
             />
           </div>
           <div className="space-y-2">
@@ -544,7 +552,7 @@ function CoupleMembershipForm({
               name="spouseLastName"
               value={formData.spouseLastName}
               onChange={(e) => handleInputChange('spouseLastName', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0" 
+              className={getInputClassName('spouseLastName')} 
             />
           </div>
         </div>
@@ -560,7 +568,7 @@ function CoupleMembershipForm({
               type="tel"
               value={formData.spousePhone}
               onChange={(e) => handleInputChange('spousePhone', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0"
+              className={getInputClassName('spousePhone')}
             />
           </div>
           <div className="space-y-2">
@@ -573,7 +581,7 @@ function CoupleMembershipForm({
               type="email"
               value={formData.spouseEmail}
               onChange={(e) => handleInputChange('spouseEmail', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0"
+              className={getInputClassName('spouseEmail')}
             />
           </div>
         </div>
@@ -590,7 +598,7 @@ function CoupleMembershipForm({
               value={formData.spouseDob}
               onChange={(e) => handleInputChange('spouseDob', e.target.value)}
               placeholder="dd / mm / yyyy"
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0"
+              className={getInputClassName('spouseDob')}
             />
           </div>
           <div className="space-y-2">
@@ -598,7 +606,7 @@ function CoupleMembershipForm({
               Select Work Status
             </Label>
             <Select value={formData.spouseWorkStatus} onValueChange={(value) => handleInputChange('spouseWorkStatus', value)}>
-              <SelectTrigger className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0">
+              <SelectTrigger className={getSelectClassName('spouseWorkStatus')}>
                 <SelectValue placeholder="Select Work Status" />
               </SelectTrigger>
               <SelectContent>
@@ -617,7 +625,7 @@ function CoupleMembershipForm({
               name="spouseAddress"
               value={formData.spouseAddress}
               onChange={(e) => handleInputChange('spouseAddress', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0" 
+              className={getInputClassName('spouseAddress')} 
             />
           </div>
         </div>
@@ -632,7 +640,7 @@ function CoupleMembershipForm({
               name="spouseCompanyName"
               value={formData.spouseCompanyName}
               onChange={(e) => handleInputChange('spouseCompanyName', e.target.value)}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0" 
+              className={getInputClassName('spouseCompanyName')} 
             />
           </div>
           <div className="space-y-2">
@@ -643,6 +651,7 @@ function CoupleMembershipForm({
               id="spousePrimaryIndustry" 
               value={formData.spousePrimaryIndustry}
               onChange={(value) => handleInputChange('spousePrimaryIndustry', value)}
+              className={getSelectClassName('spousePrimaryIndustry')}
             />
             <input type="hidden" name="spousePrimaryIndustry" value={formData.spousePrimaryIndustry} />
           </div>
@@ -658,7 +667,7 @@ function CoupleMembershipForm({
             value={formData.spousePrimaryIndustryOther}
             onChange={(e) => handleInputChange('spousePrimaryIndustryOther', e.target.value)}
             placeholder="Type Industry Here"
-            className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0"
+            className={getInputClassName('spousePrimaryIndustryOther')}
           />
         </div>
 
@@ -667,7 +676,11 @@ function CoupleMembershipForm({
             <Label htmlFor="spousePassportUpload" className="text-gray-600 text-sm">
               {"Upload – Passport Size Photos"}
             </Label>
-            <div className="flex items-center gap-2">
+            <div className={`flex items-center gap-2 p-2 rounded ${
+              validationErrors.spousePassportUpload 
+                ? 'border-2 border-red-500 bg-red-50' 
+                : ''
+            }`}>
               <Input
                 id="spousePassportUpload"
                 name="spousePassportUpload"
@@ -676,8 +689,8 @@ function CoupleMembershipForm({
                 className="hidden"
                 onChange={(e) => {
                   setSpousePhotoName(e.target.files?.[0]?.name || '')
-                  if (validationErrors.length > 0) {
-                    setValidationErrors([])
+                  if (validationErrors.spousePassportUpload) {
+                    setValidationErrors((prev: Record<string, boolean>) => ({ ...prev, spousePassportUpload: false }))
                   }
                 }}
               />
@@ -709,7 +722,7 @@ function CoupleMembershipForm({
               value={formData.spouseGetPlatform}
               onChange={(e) => handleInputChange('spouseGetPlatform', e.target.value)}
               rows={4}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0 resize-none"
+              className={getInputClassName('spouseGetPlatform') + ' resize-none'}
             />
           </div>
           <div className="space-y-2">
@@ -722,7 +735,7 @@ function CoupleMembershipForm({
               value={formData.spouseHelpCommunity}
               onChange={(e) => handleInputChange('spouseHelpCommunity', e.target.value)}
               rows={4}
-              className="bg-gray-100 border-gray-300 focus:border-gray-400 focus:ring-0 resize-none"
+              className={getInputClassName('spouseHelpCommunity') + ' resize-none'}
             />
           </div>
         </div>

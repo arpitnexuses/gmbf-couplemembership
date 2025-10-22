@@ -744,7 +744,7 @@ function CoupleMembershipForm({
       <Button
         type="submit"
         disabled={isSubmitting}
-        className="w-full bg-[#5fce7d] hover:bg-[#4fb86a] text-white py-6 text-lg font-normal rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full text-white py-6 text-lg font-normal rounded-md disabled:opacity-50 disabled:cursor-not-allowed bg-[#3755A5] hover:bg-[#5fce7d] transition-colors"
       >
         {isSubmitting ? 'Sending...' : 'Send'}
       </Button>
